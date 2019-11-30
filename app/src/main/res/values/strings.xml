@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">MyView</string>
+    <string name="min_speed">0 km/h</string>
+    <string name="max_speed">200 km/h</string>
+</resources>
