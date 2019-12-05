@@ -11,7 +11,10 @@ import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
+import android.os.Parcel;
+import android.os.Parcelable;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.View;
 
 import androidx.annotation.NonNull;
@@ -25,17 +28,20 @@ public class Speedometr extends View {
     private static final float STROKE_WIDTH = 50f;
     private static final Paint TEXT_PAINT = new Paint(Paint.ANTI_ALIAS_FLAG) ;
     private static final Paint LITTLE_TEXT_PAINT = new Paint(Paint.ANTI_ALIAS_FLAG) ;
+    private static final String TAG = "tag" ;
     private static float LITTLE_RADIUS = 40f;
     private static float MICRO_RADIUS = 20f;
-    private static final float RADIUS = 300f;
+    private static float RADIUS = 400f;
     private static int MAX_SPEED;
     private static final int MAX_SPEED_DEFAULT = 200;
     private static int SPEED;
-    private static final RectF ARC_RECT = new RectF(STROKE_WIDTH / 2, STROKE_WIDTH / 2, 2 * RADIUS, 2 * RADIUS);
+    private static RectF ARC_RECT = new RectF(STROKE_WIDTH / 2, STROKE_WIDTH / 2, 2 * RADIUS, 2 * RADIUS);
+    private static float current_width;
+    private static float current_height;
     private static int progress;
     private static Path farthest = new Path();
-    private static final Rect mTextBounds = new Rect();
-    private static float circleCenter = RADIUS + STROKE_WIDTH / 4;
+    private static final Rect textBounds = new Rect();
+    private static float circleCenter;
     private int COLOR_LOW = Color.GREEN;
     private int COLOR_MEDIUM = Color.YELLOW;
     private int COLOR_HIGH = Color.RED;
@@ -70,6 +76,31 @@ public class Speedometr extends View {
         init(context, attrs);
     }
 
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        Log.d("measure", "onMeasure() called with: widthMeasureSpec = [" + MeasureSpec.toString(widthMeasureSpec) + "], heightMeasureSpec = [" + MeasureSpec.toString(heightMeasureSpec) + "]");
+        final String maxProgressString = formatString(MAX_SPEED);
+        getTextBounds(maxProgressString);
+        float desiredWidth = Math.max(textBounds.width() + 4*STROKE_WIDTH, getSuggestedMinimumWidth()) + getPaddingLeft() + getPaddingRight();
+        float desiredHeight = Math.max(textBounds.height() + 4*STROKE_WIDTH, getSuggestedMinimumHeight()) + getPaddingTop() + getPaddingBottom();
+        float desiredSize =  1 * Math.max(desiredHeight, desiredWidth);
+        int height = resolveSize((int)desiredSize, widthMeasureSpec);
+        int width = resolveSize((int)desiredSize, heightMeasureSpec);
+        setMeasuredDimension(width, height);
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        Log.d(TAG, "onSizeChanged() called with: w = [" + w + "], h = [" + h + "], oldw = [" + oldw + "], oldh = [" + oldh + "]");
+        final int size = Math.min(h, w);
+        ARC_RECT = new RectF(getPaddingLeft()+STROKE_WIDTH / 2, getPaddingTop()+ STROKE_WIDTH / 2,  size - STROKE_WIDTH/2 - getPaddingRight(), size - STROKE_WIDTH/2 - getPaddingBottom());
+        current_height = size - STROKE_WIDTH/2 - getPaddingBottom() - getPaddingTop() - STROKE_WIDTH / 2;
+        current_width = size - STROKE_WIDTH/2 - getPaddingRight() - getPaddingLeft() - STROKE_WIDTH / 2;
+        RADIUS = Math.min(current_height, current_width)/2;
+        configureBackground();
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         farthest.reset();
@@ -80,6 +111,7 @@ public class Speedometr extends View {
         float x2 = (float) Math.cos(-2 * Math.PI / 3 + 4*Math.PI * progress / (3*MAX_SPEED_DEFAULT));
         float y2 = (float) Math.sin(-2 * Math.PI / 3 + 4*Math.PI * progress / (3*MAX_SPEED_DEFAULT));
 
+        circleCenter = RADIUS + STROKE_WIDTH / 4;
         canvas.drawArc(ARC_RECT, -210, 240, false, BACKGROUND_ARC_PAINT);
         canvas.drawCircle(circleCenter, circleCenter, LITTLE_RADIUS, CIRCLE_PAINT);
         farthest.moveTo((1-x1)*MICRO_RADIUS + RADIUS-MICRO_RADIUS/2.5f,(1-y1)*MICRO_RADIUS  + RADIUS-MICRO_RADIUS /2.5f);
@@ -99,8 +131,8 @@ public class Speedometr extends View {
         int speed = (int) progress*(MAX_SPEED/MAX_SPEED_DEFAULT);
         final String progressString = formatString(speed);
         getTextBounds(progressString);
-        float x = ARC_RECT.width() / 2f - mTextBounds.width() / 2f - mTextBounds.left + ARC_RECT.left;
-        float y = ARC_RECT.height()/1.4f + mTextBounds.height() / 2f - mTextBounds.bottom + ARC_RECT.top;
+        float x = ARC_RECT.width() / 2f - textBounds.width() / 2f - textBounds.left + ARC_RECT.left;
+        float y = ARC_RECT.height()/1.4f + textBounds.height() / 2f - textBounds.bottom + ARC_RECT.top;
         canvas.drawText(progressString, x, y, TEXT_PAINT);
         canvas.drawText(getContext().getString(R.string.min_speed), 30f , ARC_RECT.height()-50f, LITTLE_TEXT_PAINT);
         canvas.drawText(MAX_SPEED +" km/h", ARC_RECT.width()-120f, ARC_RECT.height()-50f , LITTLE_TEXT_PAINT);
@@ -112,7 +144,7 @@ public class Speedometr extends View {
     }
 
     private void getTextBounds(@NonNull String progressString) {
-        TEXT_PAINT.getTextBounds(progressString, 0, progressString.length(), mTextBounds);
+        TEXT_PAINT.getTextBounds(progressString, 0, progressString.length(), textBounds);
     }
 
     private void extractAttributes(@NonNull Context context, @Nullable AttributeSet attrs) {
@@ -165,11 +197,12 @@ public class Speedometr extends View {
         gradientColors[1] = COLOR_MEDIUM;
         gradientColors[2] = COLOR_HIGH;
 
-        LinearGradient linearGradient = new LinearGradient(0, ARC_RECT.top, 2 * RADIUS, getHeight(),
+        LinearGradient linearGradient = new LinearGradient(0, ARC_RECT.top, 2 * RADIUS, 2 * RADIUS - STROKE_WIDTH,
                 gradientColors, null, Shader.TileMode.CLAMP);
 
         BACKGROUND_ARC_PAINT.setShader(linearGradient);
         BACKGROUND_ARC_PAINT.setStyle(Paint.Style.STROKE);
         BACKGROUND_ARC_PAINT.setStrokeWidth(STROKE_WIDTH);
     }
+
 }

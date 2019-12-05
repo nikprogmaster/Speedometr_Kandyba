@@ -12,8 +12,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:id="@+id/speedometr"
-        app:max_speed="200"
-        app:speed="100"/>
+        app:max_speed="300"
+        app:speed="0"/>
     <SeekBar
         android:id="@+id/seekbar"
         android:layout_width="match_parent"
